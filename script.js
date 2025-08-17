@@ -11,6 +11,7 @@ class BookmarkWizard {
         this.draggedElement = null;
         this.lastOperation = null; // For undo functionality
         this.manuallyOrderedFolders = new Set(); // Track folders with custom ordering
+        this.dropHandled = false; // Prevent event conflicts
         
         this.initEventListeners();
     }
@@ -616,6 +617,7 @@ class BookmarkWizard {
             this.clearInsertionIndicators();
             this.draggedItem = null;
             this.draggedElement = null;
+            this.dropHandled = false; // Reset flag
         });
         
         // Add reordering support
@@ -678,12 +680,18 @@ class BookmarkWizard {
                 const nearBottomEdge = y >= bottomEdge - edgeThreshold;
                 
                 if (nearTopEdge || nearBottomEdge) {
+                    // CRITICAL: Prevent event from propagating to other handlers
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
                     
                     console.log('Reordering triggered:', this.draggedItem.name, nearTopEdge ? 'before' : 'after', item.name);
                     this.reorderItems(this.draggedItem, item, nearTopEdge);
                     this.clearInsertionIndicators();
+                    
+                    // Mark that we handled this drop
+                    this.dropHandled = true;
+                    return false;
                 }
             }
         });
@@ -742,6 +750,12 @@ class BookmarkWizard {
         });
         
         element.addEventListener('drop', (e) => {
+            // Check if reorder handler already processed this drop
+            if (this.dropHandled) {
+                this.dropHandled = false;
+                return;
+            }
+            
             if (!this.draggedItem || this.draggedItem === folder) return;
             
             const draggedParent = this.findParentFolder(this.draggedItem);
@@ -769,6 +783,7 @@ class BookmarkWizard {
                         return;
                     }
                     
+                    console.log('Moving into folder:', this.draggedItem.name, 'into', folder.name);
                     this.moveItem(this.draggedItem, folder);
                 }
             }
