@@ -518,6 +518,17 @@ header h1 {
     animation: pulse 1s infinite;
 }
 
+/* Insertion indicator for reordering */
+.insertion-indicator {
+    height: 3px !important;
+    background: linear-gradient(90deg, #e74c3c, #f39c12) !important;
+    border-radius: 2px !important;
+    margin: 1px 0 !important;
+    animation: pulse 1s infinite !important;
+    position: relative !important;
+    z-index: 1000 !important;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 0.6; }
     50% { opacity: 1; }

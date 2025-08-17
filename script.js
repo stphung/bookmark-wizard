@@ -10,6 +10,7 @@ class BookmarkWizard {
         this.draggedItem = null;
         this.draggedElement = null;
         this.lastOperation = null; // For undo functionality
+        this.manuallyOrderedFolders = new Set(); // Track folders with custom ordering
         
         this.initEventListeners();
     }
@@ -471,12 +472,14 @@ class BookmarkWizard {
             
             // Only show children if not collapsed
             if (!isCollapsed) {
-                // Sort children: folders first, then bookmarks
-                const sortedChildren = [...folder.children].sort((a, b) => {
-                    if (a.type === 'folder' && b.type === 'bookmark') return -1;
-                    if (a.type === 'bookmark' && b.type === 'folder') return 1;
-                    return 0;
-                });
+                // Use children in their current order (preserves user reordering)
+                // Only sort if this folder hasn't been manually reordered
+                const sortedChildren = this.shouldAutoSort(folder) ? 
+                    [...folder.children].sort((a, b) => {
+                        if (a.type === 'folder' && b.type === 'bookmark') return -1;
+                        if (a.type === 'bookmark' && b.type === 'folder') return 1;
+                        return 0;
+                    }) : [...folder.children];
                 
                 // Create a container for this folder's children
                 const childContainer = document.createElement('div');
@@ -615,8 +618,57 @@ class BookmarkWizard {
             element.classList.remove('dragging');
             element.style.opacity = '';
             this.clearDropIndicators();
+            this.clearInsertionIndicators();
             this.draggedItem = null;
             this.draggedElement = null;
+        });
+        
+        // Add reordering support
+        this.addReorderHandlers(element, item);
+    }
+
+    addReorderHandlers(element, item) {
+        element.addEventListener('dragover', (e) => {
+            if (!this.draggedItem || this.draggedItem === item) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Check if we're dragging within the same parent container
+            const draggedParent = this.findParentFolder(this.draggedItem);
+            const targetParent = this.findParentFolder(item);
+            
+            if (draggedParent === targetParent) {
+                // Same parent - show insertion indicator
+                const rect = element.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                const insertBefore = e.clientY < midY;
+                
+                this.clearInsertionIndicators();
+                this.showInsertionIndicator(element, insertBefore);
+                
+                e.dataTransfer.dropEffect = 'move';
+            }
+        });
+        
+        element.addEventListener('drop', (e) => {
+            if (!this.draggedItem || this.draggedItem === item) return;
+            
+            const draggedParent = this.findParentFolder(this.draggedItem);
+            const targetParent = this.findParentFolder(item);
+            
+            if (draggedParent === targetParent) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Reorder within same parent
+                const rect = element.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                const insertBefore = e.clientY < midY;
+                
+                this.reorderItems(this.draggedItem, item, insertBefore);
+                this.clearInsertionIndicators();
+            }
         });
     }
 
@@ -706,17 +758,33 @@ class BookmarkWizard {
     }
 
     undoLastOperation() {
-        if (!this.lastOperation || this.lastOperation.type !== 'move') {
+        if (!this.lastOperation) {
             return;
         }
         
-        const { item, from, to } = this.lastOperation;
-        
-        // Remove from current location
-        this.removeItemFromParent(item);
-        
-        // Add back to original location
-        from.children.push(item);
+        if (this.lastOperation.type === 'move') {
+            const { item, from, to } = this.lastOperation;
+            
+            // Remove from current location
+            this.removeItemFromParent(item);
+            
+            // Add back to original location
+            from.children.push(item);
+            
+            console.log(`Undid move: ${item.type} "${item.name}" back to "${from.name}"`);
+            
+        } else if (this.lastOperation.type === 'reorder') {
+            const { item, parent, fromIndex, toIndex } = this.lastOperation;
+            
+            // Remove from current position
+            const currentIndex = parent.children.indexOf(item);
+            parent.children.splice(currentIndex, 1);
+            
+            // Insert back at original position
+            parent.children.splice(fromIndex, 0, item);
+            
+            console.log(`Undid reorder: ${item.type} "${item.name}" back to original position`);
+        }
         
         // Clear the operation
         this.lastOperation = null;
@@ -725,8 +793,6 @@ class BookmarkWizard {
         this.renderFolderTree();
         this.renderBookmarks();
         this.updateButtons();
-        
-        console.log(`Undid move: ${item.type} "${item.name}" back to "${from.name}"`);
     }
 
     findParentFolder(targetItem, folder = null) {
@@ -765,6 +831,92 @@ class BookmarkWizard {
         document.querySelectorAll('.drop-zone-active').forEach(el => {
             el.classList.remove('drop-zone-active');
         });
+    }
+
+    showInsertionIndicator(element, insertBefore) {
+        const indicator = document.createElement('div');
+        indicator.className = 'insertion-indicator';
+        indicator.style.cssText = `
+            height: 3px;
+            background: linear-gradient(90deg, #e74c3c, #f39c12);
+            border-radius: 2px;
+            margin: 1px 0;
+            animation: pulse 1s infinite;
+            position: relative;
+            z-index: 1000;
+        `;
+        
+        if (insertBefore) {
+            element.parentNode.insertBefore(indicator, element);
+        } else {
+            element.parentNode.insertBefore(indicator, element.nextSibling);
+        }
+    }
+
+    clearInsertionIndicators() {
+        document.querySelectorAll('.insertion-indicator').forEach(el => {
+            el.remove();
+        });
+    }
+
+    reorderItems(draggedItem, targetItem, insertBefore) {
+        const parent = this.findParentFolder(draggedItem);
+        if (!parent) return;
+        
+        // Store operation for undo
+        const originalIndex = parent.children.indexOf(draggedItem);
+        const targetIndex = parent.children.indexOf(targetItem);
+        
+        this.lastOperation = {
+            type: 'reorder',
+            item: draggedItem,
+            parent: parent,
+            fromIndex: originalIndex,
+            toIndex: insertBefore ? targetIndex : targetIndex + 1
+        };
+        
+        // Remove dragged item from its current position
+        parent.children.splice(originalIndex, 1);
+        
+        // Find new target index (may have shifted after removal)
+        const newTargetIndex = parent.children.indexOf(targetItem);
+        const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+        
+        // Insert at new position
+        parent.children.splice(insertIndex, 0, draggedItem);
+        
+        // Re-render the interface
+        this.renderFolderTree();
+        this.renderBookmarks();
+        this.updateButtons();
+        
+        // Mark this folder as manually ordered
+        const parentId = this.getFolderIdFromPath(parent);
+        this.manuallyOrderedFolders.add(parentId);
+        
+        console.log(`Reordered ${draggedItem.type} "${draggedItem.name}" ${insertBefore ? 'before' : 'after'} "${targetItem.name}"`);
+    }
+
+    getFolderIdFromPath(folder) {
+        // Generate a unique ID for this folder based on its path
+        const buildPath = (target, current = this.bookmarks, path = '') => {
+            if (current === target) return path + '/' + current.name;
+            
+            for (let child of current.children || []) {
+                if (child.type === 'folder') {
+                    const result = buildPath(target, child, path + '/' + current.name);
+                    if (result) return result;
+                }
+            }
+            return null;
+        };
+        
+        return buildPath(folder) || '/' + folder.name;
+    }
+
+    shouldAutoSort(folder) {
+        const folderId = this.getFolderIdFromPath(folder);
+        return !this.manuallyOrderedFolders.has(folderId);
     }
 
     renderBookmarks(folder = null) {
@@ -913,7 +1065,7 @@ class BookmarkWizard {
         const undoBtn = document.getElementById('undoBtn');
         
         deleteBtn.disabled = !this.selectedItem || this.selectedItem === this.bookmarks;
-        undoBtn.disabled = !this.lastOperation || this.lastOperation.type !== 'move';
+        undoBtn.disabled = !this.lastOperation || (this.lastOperation.type !== 'move' && this.lastOperation.type !== 'reorder');
     }
 
     enableButtons() {
