@@ -411,7 +411,7 @@ class BookmarkWizard {
             const folderId = this.getFolderId(folder, parentPath);
             const hasSubfolders = folder.children.some(c => c.type === 'folder');
             const hasBookmarks = folder.children.some(c => c.type === 'bookmark');
-            const hasAnyChildren = hasSubfolders || (!this.compactMode && hasBookmarks);
+            const hasAnyChildren = hasSubfolders || hasBookmarks;
             const isCollapsed = this.collapsedFolders.has(folderId);
             const counts = this.countFolderItems(folder);
             
@@ -487,8 +487,20 @@ class BookmarkWizard {
                 childContainer.className = 'folder-children';
                 childContainer.dataset.parentId = folderId;
                 
+                // Add initial reorder zone at the top of the list
+                if (sortedChildren.length > 0) {
+                    const topReorderZone = this.createReorderZone(folder, 0, level + 1);
+                    childContainer.appendChild(topReorderZone);
+                }
+                
                 // Render all children in their current order (preserves reordering)
-                sortedChildren.forEach(child => {
+                sortedChildren.forEach((child, index) => {
+                    // Add reorder drop zone before each item (after the first one)
+                    if (index > 0) {
+                        const reorderZone = this.createReorderZone(folder, index, level + 1);
+                        childContainer.appendChild(reorderZone);
+                    }
+                    
                     if (child.type === 'folder') {
                         // Render subfolder
                         renderFolder(child, level + 1, folderId, childContainer);
@@ -520,6 +532,12 @@ class BookmarkWizard {
                         childContainer.appendChild(bookmarkEl);
                     }
                 });
+                
+                // Add final reorder zone after last item
+                if (sortedChildren.length > 0) {
+                    const reorderZone = this.createReorderZone(folder, sortedChildren.length, level + 1);
+                    childContainer.appendChild(reorderZone);
+                }
                 
                 // Only append the child container if it has content
                 if (childContainer.children.length > 0) {
@@ -615,86 +633,174 @@ class BookmarkWizard {
             element.style.opacity = '';
             this.clearDropIndicators();
             this.clearInsertionIndicators();
+            this.clearReorderZoneHighlights();
             this.draggedItem = null;
             this.draggedElement = null;
             this.dropHandled = false; // Reset flag
         });
         
-        // Add reordering support
-        this.addReorderHandlers(element, item);
     }
 
-    addReorderHandlers(element, item) {
-        element.addEventListener('dragover', (e) => {
-            if (!this.draggedItem || this.draggedItem === item) return;
+    createReorderZone(parentFolder, insertIndex, level) {
+        const zone = document.createElement('div');
+        zone.className = 'reorder-zone';
+        zone.dataset.insertIndex = insertIndex;
+        zone.dataset.parentId = this.getFolderIdFromPath(parentFolder);
+        zone.style.cssText = `
+            height: 8px;
+            margin: 2px 0;
+            margin-left: ${level * 1}rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+            opacity: 0;
+            position: relative;
+            z-index: 1000;
+        `;
+        
+        zone.addEventListener('dragenter', (e) => {
+            if (!this.draggedItem) return;
             
-            // Check if we're dragging within the same parent container
             const draggedParent = this.findParentFolder(this.draggedItem);
-            const targetParent = this.findParentFolder(item);
-            
-            if (draggedParent === targetParent) {
-                const rect = element.getBoundingClientRect();
-                const y = e.clientY;
-                const topEdge = rect.top;
-                const bottomEdge = rect.bottom;
-                const height = rect.height;
-                const edgeThreshold = Math.min(height * 0.25, 8); // 25% of height or 8px max
+            if (draggedParent === parentFolder) {
+                e.preventDefault();
+                e.stopPropagation();
                 
-                // Only handle reordering if mouse is near top or bottom edge
-                const nearTopEdge = y <= topEdge + edgeThreshold;
-                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
+                // Clear all other drop indicators first
+                this.clearDropIndicators();
+                this.clearReorderZoneHighlights();
                 
-                if (nearTopEdge || nearBottomEdge) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    console.log('Reorder dragover triggered for:', this.draggedItem.name, 'over:', item.name, nearTopEdge ? 'top edge' : 'bottom edge');
-                    
-                    // Clear any drop zone highlights
-                    this.clearDropIndicators();
-                    this.clearInsertionIndicators();
-                    
-                    // Show insertion indicator
-                    this.showInsertionIndicator(element, nearTopEdge);
-                    
-                    e.dataTransfer.dropEffect = 'move';
-                }
+                // Show visual feedback for this zone
+                zone.style.cssText = `
+                    height: 24px;
+                    margin: 4px 0;
+                    margin-left: ${level * 1}rem;
+                    border-radius: 4px;
+                    background: linear-gradient(90deg, #e74c3c, #f39c12);
+                    opacity: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                    position: relative;
+                    z-index: 1000;
+                    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+                `;
+                zone.textContent = `Reorder: Insert here`;
+                zone.dataset.active = 'true';
+                
+                console.log('Reorder zone activated for position:', insertIndex);
             }
         });
         
-        element.addEventListener('drop', (e) => {
-            if (!this.draggedItem || this.draggedItem === item) return;
+        zone.addEventListener('dragover', (e) => {
+            if (!this.draggedItem) return;
             
             const draggedParent = this.findParentFolder(this.draggedItem);
-            const targetParent = this.findParentFolder(item);
-            
-            if (draggedParent === targetParent) {
-                const rect = element.getBoundingClientRect();
-                const y = e.clientY;
-                const topEdge = rect.top;
-                const bottomEdge = rect.bottom;
-                const height = rect.height;
-                const edgeThreshold = Math.min(height * 0.25, 8);
-                
-                const nearTopEdge = y <= topEdge + edgeThreshold;
-                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
-                
-                if (nearTopEdge || nearBottomEdge) {
-                    // CRITICAL: Prevent event from propagating to other handlers
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    
-                    console.log('Reordering triggered:', this.draggedItem.name, nearTopEdge ? 'before' : 'after', item.name);
-                    this.reorderItems(this.draggedItem, item, nearTopEdge);
-                    this.clearInsertionIndicators();
-                    
-                    // Mark that we handled this drop
-                    this.dropHandled = true;
-                    return false;
-                }
+            if (draggedParent === parentFolder) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
             }
         });
+        
+        zone.addEventListener('dragleave', (e) => {
+            if (!this.draggedItem) return;
+            
+            // Only hide if we're actually leaving this zone (not entering a child)
+            const rect = zone.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                zone.style.cssText = `
+                    height: 8px;
+                    margin: 2px 0;
+                    margin-left: ${level * 1}rem;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                    opacity: 0;
+                    position: relative;
+                    z-index: 1000;
+                `;
+                zone.textContent = '';
+                zone.dataset.active = 'false';
+            }
+        });
+        
+        zone.addEventListener('drop', (e) => {
+            if (!this.draggedItem) return;
+            
+            const draggedParent = this.findParentFolder(this.draggedItem);
+            if (draggedParent === parentFolder) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('DROP EVENT: Reordering to position:', insertIndex, 'in folder:', parentFolder.name);
+                
+                // Perform the reorder
+                this.reorderToPosition(this.draggedItem, parentFolder, insertIndex);
+                
+                // Reset visual state
+                this.clearReorderZoneHighlights();
+            }
+        });
+        
+        return zone;
+    }
+
+    reorderToPosition(draggedItem, parentFolder, insertIndex) {
+        console.log('=== REORDER START ===');
+        console.log('Dragged item:', draggedItem.name);
+        console.log('Parent folder:', parentFolder.name);
+        console.log('Target insert index:', insertIndex);
+        
+        // Store operation for undo
+        const originalIndex = parentFolder.children.indexOf(draggedItem);
+        console.log('Original index:', originalIndex);
+        
+        if (originalIndex === -1) {
+            console.error('Item not found in parent children array');
+            return;
+        }
+        
+        if (originalIndex === insertIndex || originalIndex + 1 === insertIndex) {
+            console.log('Item is already in the target position, skipping reorder');
+            return;
+        }
+        
+        console.log('Children before reorder:', parentFolder.children.map(c => c.name));
+        
+        this.lastOperation = {
+            type: 'reorder',
+            item: draggedItem,
+            parent: parentFolder,
+            fromIndex: originalIndex,
+            toIndex: insertIndex
+        };
+        
+        // Remove from current position
+        parentFolder.children.splice(originalIndex, 1);
+        console.log('After removal:', parentFolder.children.map(c => c.name));
+        
+        // Adjust insert index if item was before the target position
+        const finalIndex = originalIndex < insertIndex ? insertIndex - 1 : insertIndex;
+        console.log('Final insert index:', finalIndex);
+        
+        // Insert at new position
+        parentFolder.children.splice(finalIndex, 0, draggedItem);
+        console.log('After insertion:', parentFolder.children.map(c => c.name));
+        
+        // Mark folder as manually ordered using a simpler approach
+        parentFolder._manuallyOrdered = true;
+        
+        console.log('=== REORDER COMPLETE ===');
+        
+        // Re-render
+        this.renderFolderTree();
+        this.renderBookmarks();
+        this.updateButtons();
     }
 
     addDropHandlers(element, folder) {
@@ -706,39 +812,22 @@ class BookmarkWizard {
             const isMovingToFolder = draggedParent !== folder;
             
             if (isMovingToFolder) {
-                const rect = element.getBoundingClientRect();
-                const y = e.clientY;
-                const topEdge = rect.top;
-                const bottomEdge = rect.bottom;
-                const height = rect.height;
-                const edgeThreshold = Math.min(height * 0.25, 8);
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
                 
-                // Only handle folder drop in center area (not near edges)
-                const nearTopEdge = y <= topEdge + edgeThreshold;
-                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
-                const inCenterArea = !nearTopEdge && !nearBottomEdge;
-                
-                if (inCenterArea) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    
-                    // Prevent dropping folder into itself or its descendants
-                    if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
-                        e.dataTransfer.dropEffect = 'none';
-                        return;
-                    }
-                    
-                    // Clear reorder indicators and show drop zone
-                    this.clearInsertionIndicators();
-                    this.clearDropIndicators();
-                    element.classList.add('drop-zone-active');
+                // Prevent dropping folder into itself or its descendants
+                if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                    e.dataTransfer.dropEffect = 'none';
+                    return;
                 }
+                
+                // Show drop zone highlight
+                this.clearDropIndicators();
+                element.classList.add('drop-zone-active');
             }
         });
         
         element.addEventListener('dragleave', (e) => {
-            e.stopPropagation();
             // Only remove highlight if we're actually leaving this specific element
             const rect = element.getBoundingClientRect();
             const x = e.clientX;
@@ -750,42 +839,23 @@ class BookmarkWizard {
         });
         
         element.addEventListener('drop', (e) => {
-            // Check if reorder handler already processed this drop
-            if (this.dropHandled) {
-                this.dropHandled = false;
-                return;
-            }
-            
             if (!this.draggedItem || this.draggedItem === folder) return;
             
             const draggedParent = this.findParentFolder(this.draggedItem);
             const isMovingToFolder = draggedParent !== folder;
             
             if (isMovingToFolder) {
-                const rect = element.getBoundingClientRect();
-                const y = e.clientY;
-                const topEdge = rect.top;
-                const bottomEdge = rect.bottom;
-                const height = rect.height;
-                const edgeThreshold = Math.min(height * 0.25, 8);
+                e.preventDefault();
+                e.stopPropagation();
+                element.classList.remove('drop-zone-active');
                 
-                const nearTopEdge = y <= topEdge + edgeThreshold;
-                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
-                const inCenterArea = !nearTopEdge && !nearBottomEdge;
-                
-                if (inCenterArea) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    element.classList.remove('drop-zone-active');
-                    
-                    // Prevent dropping folder into itself or its descendants
-                    if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
-                        return;
-                    }
-                    
-                    console.log('Moving into folder:', this.draggedItem.name, 'into', folder.name);
-                    this.moveItem(this.draggedItem, folder);
+                // Prevent dropping folder into itself or its descendants
+                if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                    return;
                 }
+                
+                console.log('Moving into folder:', this.draggedItem.name, 'into', folder.name);
+                this.moveItem(this.draggedItem, folder);
             }
         });
     }
@@ -846,6 +916,11 @@ class BookmarkWizard {
         } else if (this.lastOperation.type === 'reorder') {
             const { item, parent, fromIndex, toIndex } = this.lastOperation;
             
+            console.log('=== UNDO REORDER ===');
+            console.log('Item:', item.name);
+            console.log('Parent:', parent.name);
+            console.log('Moving from current position back to:', fromIndex);
+            
             // Remove from current position
             const currentIndex = parent.children.indexOf(item);
             parent.children.splice(currentIndex, 1);
@@ -853,6 +928,7 @@ class BookmarkWizard {
             // Insert back at original position
             parent.children.splice(fromIndex, 0, item);
             
+            console.log('Order after undo:', parent.children.map(c => c.name));
             console.log(`Undid reorder: ${item.type} "${item.name}" back to original position`);
         }
         
@@ -900,6 +976,26 @@ class BookmarkWizard {
     clearDropIndicators() {
         document.querySelectorAll('.drop-zone-active').forEach(el => {
             el.classList.remove('drop-zone-active');
+        });
+    }
+
+    clearReorderZoneHighlights() {
+        document.querySelectorAll('.reorder-zone').forEach(zone => {
+            if (zone.dataset.active === 'true') {
+                const level = parseInt(zone.style.marginLeft) || 0;
+                zone.style.cssText = `
+                    height: 8px;
+                    margin: 2px 0;
+                    margin-left: ${zone.style.marginLeft};
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                    opacity: 0;
+                    position: relative;
+                    z-index: 1000;
+                `;
+                zone.textContent = '';
+                zone.dataset.active = 'false';
+            }
         });
     }
 
@@ -1008,8 +1104,7 @@ class BookmarkWizard {
     }
 
     shouldAutoSort(folder) {
-        const folderId = this.getFolderIdFromPath(folder);
-        return !this.manuallyOrderedFolders.has(folderId);
+        return !folder._manuallyOrdered;
     }
 
     renderBookmarks(folder = null) {

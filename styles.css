@@ -553,3 +553,14 @@ header h1 {
     0%, 100% { opacity: 0.6; }
     50% { opacity: 1; }
 }
+
+/* Reorder zone styles */
+.reorder-zone {
+    cursor: copy !important;
+    user-select: none;
+}
+
+.reorder-zone[data-active="true"] {
+    cursor: copy !important;
+    animation: pulse 1s infinite;
+}
