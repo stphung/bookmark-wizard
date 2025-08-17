@@ -72,7 +72,7 @@ Works with modern browsers including:
 
 ## Tips
 
-- **Drag & Drop**: Drag bookmarks and folders to reorganize them between folders
+- **Drag & Drop**: Drag bookmarks and folders to reorganize them between folders or reorder within folders
 - **Keyboard Shortcuts**: Use arrow keys to navigate, Enter to open, Ctrl+Z to undo moves
 - **Double-click** bookmarks to open them in a new tab
 - **Search bar** for quick filtering across all bookmarks

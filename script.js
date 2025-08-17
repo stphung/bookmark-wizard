@@ -486,44 +486,39 @@ class BookmarkWizard {
                 childContainer.className = 'folder-children';
                 childContainer.dataset.parentId = folderId;
                 
-                // First pass: Add all subfolders
+                // Render all children in their current order (preserves reordering)
                 sortedChildren.forEach(child => {
                     if (child.type === 'folder') {
+                        // Render subfolder
                         renderFolder(child, level + 1, folderId, childContainer);
+                    } else if (child.type === 'bookmark' && !this.compactMode) {
+                        // Render bookmark
+                        const bookmarkEl = document.createElement('div');
+                        bookmarkEl.className = 'bookmark-item';
+                        bookmarkEl.style.marginLeft = `${(level + 1) * 1}rem`;
+                        bookmarkEl.draggable = true;
+                        bookmarkEl.dataset.itemType = 'bookmark';
+                        bookmarkEl.dataset.itemData = JSON.stringify(child);
+                        
+                        const favicon = child.icon ? 
+                            `<img class="favicon" src="${child.icon}" alt="" onerror="this.style.display='none'">` :
+                            '🔖';
+                        
+                        bookmarkEl.innerHTML = `
+                            ${favicon}
+                            <span class="bookmark-name">${child.name}</span>
+                        `;
+                        
+                        bookmarkEl.addEventListener('click', () => {
+                            this.selectBookmark(child, bookmarkEl);
+                        });
+                        
+                        // Add drag handlers for bookmarks
+                        this.addDragHandlers(bookmarkEl, child);
+                        
+                        childContainer.appendChild(bookmarkEl);
                     }
                 });
-                
-                // Second pass: Add all bookmarks (only if not in compact mode)
-                if (!this.compactMode) {
-                    sortedChildren.forEach(child => {
-                        if (child.type === 'bookmark') {
-                            const bookmarkEl = document.createElement('div');
-                            bookmarkEl.className = 'bookmark-item';
-                            bookmarkEl.style.marginLeft = `${(level + 1) * 1}rem`;
-                            bookmarkEl.draggable = true;
-                            bookmarkEl.dataset.itemType = 'bookmark';
-                            bookmarkEl.dataset.itemData = JSON.stringify(child);
-                            
-                            const favicon = child.icon ? 
-                                `<img class="favicon" src="${child.icon}" alt="" onerror="this.style.display='none'">` :
-                                '🔖';
-                            
-                            bookmarkEl.innerHTML = `
-                                ${favicon}
-                                <span class="bookmark-name">${child.name}</span>
-                            `;
-                            
-                            bookmarkEl.addEventListener('click', () => {
-                                this.selectBookmark(child, bookmarkEl);
-                            });
-                            
-                            // Add drag handlers for bookmarks
-                            this.addDragHandlers(bookmarkEl, child);
-                            
-                            childContainer.appendChild(bookmarkEl);
-                        }
-                    });
-                }
                 
                 // Only append the child container if it has content
                 if (childContainer.children.length > 0) {
