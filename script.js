@@ -7,6 +7,9 @@ class BookmarkWizard {
         this.collapsedFolders = new Set();
         this.favoriteFolders = new Set();
         this.compactMode = false;
+        this.draggedItem = null;
+        this.draggedElement = null;
+        this.lastOperation = null; // For undo functionality
         
         this.initEventListeners();
     }
@@ -82,6 +85,10 @@ class BookmarkWizard {
         
         document.getElementById('deleteBtn').addEventListener('click', () => {
             this.deleteSelected();
+        });
+
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            this.undoLastOperation();
         });
 
         // Search
@@ -192,6 +199,13 @@ class BookmarkWizard {
                     if (e.ctrlKey || e.metaKey) {
                         e.preventDefault();
                         document.getElementById('searchInput').focus();
+                    }
+                    break;
+                    
+                case 'z':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.undoLastOperation();
                     }
                     break;
             }
@@ -452,6 +466,13 @@ class BookmarkWizard {
                 ${favoriteBtn}
             `;
             
+            // Make folders draggable (except root)
+            if (level > 0) {
+                folderEl.draggable = true;
+                folderEl.dataset.itemType = 'folder';
+                folderEl.dataset.itemData = JSON.stringify(folder);
+            }
+            
             // Handle arrow click for expand/collapse
             const arrowEl = folderEl.querySelector('.folder-arrow');
             if (arrowEl && hasAnyChildren) {
@@ -474,6 +495,10 @@ class BookmarkWizard {
             folderEl.addEventListener('click', () => {
                 this.selectFolder(folder, folderEl);
             });
+            
+            // Drag and drop event handlers
+            this.addDragHandlers(folderEl, folder);
+            this.addDropHandlers(folderEl, folder);
             
             targetContainer.appendChild(folderEl);
             
@@ -505,6 +530,9 @@ class BookmarkWizard {
                             const bookmarkEl = document.createElement('div');
                             bookmarkEl.className = 'bookmark-item';
                             bookmarkEl.style.marginLeft = `${(level + 1) * 1}rem`;
+                            bookmarkEl.draggable = true;
+                            bookmarkEl.dataset.itemType = 'bookmark';
+                            bookmarkEl.dataset.itemData = JSON.stringify(child);
                             
                             const favicon = child.icon ? 
                                 `<img class="favicon" src="${child.icon}" alt="" onerror="this.style.display='none'">` :
@@ -518,6 +546,9 @@ class BookmarkWizard {
                             bookmarkEl.addEventListener('click', () => {
                                 this.selectBookmark(child, bookmarkEl);
                             });
+                            
+                            // Add drag handlers for bookmarks
+                            this.addDragHandlers(bookmarkEl, child);
                             
                             childContainer.appendChild(bookmarkEl);
                         }
@@ -597,6 +628,168 @@ class BookmarkWizard {
         this.renderFolderTree();
     }
 
+    addDragHandlers(element, item) {
+        element.addEventListener('dragstart', (e) => {
+            this.draggedItem = item;
+            this.draggedElement = element;
+            element.classList.add('dragging');
+            
+            // Set drag data
+            e.dataTransfer.setData('text/plain', JSON.stringify(item));
+            e.dataTransfer.effectAllowed = 'move';
+            
+            // Add visual feedback
+            setTimeout(() => {
+                element.style.opacity = '0.5';
+            }, 0);
+        });
+        
+        element.addEventListener('dragend', (e) => {
+            element.classList.remove('dragging');
+            element.style.opacity = '';
+            this.clearDropIndicators();
+            this.draggedItem = null;
+            this.draggedElement = null;
+        });
+    }
+
+    addDropHandlers(element, folder) {
+        element.addEventListener('dragover', (e) => {
+            if (!this.draggedItem || this.draggedItem === folder) return;
+            
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Prevent dropping folder into itself or its descendants
+            if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                e.dataTransfer.dropEffect = 'none';
+                return;
+            }
+            
+            element.classList.add('drop-zone-active');
+        });
+        
+        element.addEventListener('dragleave', (e) => {
+            // Only remove highlight if we're leaving the element entirely
+            if (!element.contains(e.relatedTarget)) {
+                element.classList.remove('drop-zone-active');
+            }
+        });
+        
+        element.addEventListener('drop', (e) => {
+            e.preventDefault();
+            element.classList.remove('drop-zone-active');
+            
+            if (!this.draggedItem || this.draggedItem === folder) return;
+            
+            // Prevent dropping folder into itself or its descendants
+            if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                return;
+            }
+            
+            this.moveItem(this.draggedItem, folder);
+        });
+    }
+
+    isDescendant(possibleAncestor, possibleDescendant) {
+        const checkDescendant = (folder) => {
+            if (folder === possibleDescendant) return true;
+            for (let child of folder.children || []) {
+                if (child.type === 'folder' && checkDescendant(child)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        return checkDescendant(possibleAncestor);
+    }
+
+    moveItem(item, targetFolder) {
+        // Store operation for undo
+        const sourceFolder = this.findParentFolder(item);
+        this.lastOperation = {
+            type: 'move',
+            item: item,
+            from: sourceFolder,
+            to: targetFolder
+        };
+        
+        // Remove from source
+        this.removeItemFromParent(item);
+        
+        // Add to target
+        targetFolder.children.push(item);
+        
+        // Re-render the interface
+        this.renderFolderTree();
+        this.renderBookmarks();
+        this.updateButtons();
+        
+        console.log(`Moved ${item.type} "${item.name}" to folder "${targetFolder.name}"`);
+    }
+
+    undoLastOperation() {
+        if (!this.lastOperation || this.lastOperation.type !== 'move') {
+            return;
+        }
+        
+        const { item, from, to } = this.lastOperation;
+        
+        // Remove from current location
+        this.removeItemFromParent(item);
+        
+        // Add back to original location
+        from.children.push(item);
+        
+        // Clear the operation
+        this.lastOperation = null;
+        
+        // Re-render the interface
+        this.renderFolderTree();
+        this.renderBookmarks();
+        this.updateButtons();
+        
+        console.log(`Undid move: ${item.type} "${item.name}" back to "${from.name}"`);
+    }
+
+    findParentFolder(targetItem, folder = null) {
+        const searchFolder = folder || this.bookmarks;
+        
+        for (let child of searchFolder.children) {
+            if (child === targetItem) {
+                return searchFolder;
+            }
+            if (child.type === 'folder') {
+                const found = this.findParentFolder(targetItem, child);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    removeItemFromParent(targetItem, folder = null) {
+        const searchFolder = folder || this.bookmarks;
+        
+        for (let i = 0; i < searchFolder.children.length; i++) {
+            if (searchFolder.children[i] === targetItem) {
+                searchFolder.children.splice(i, 1);
+                return true;
+            }
+            if (searchFolder.children[i].type === 'folder') {
+                if (this.removeItemFromParent(targetItem, searchFolder.children[i])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    clearDropIndicators() {
+        document.querySelectorAll('.drop-zone-active').forEach(el => {
+            el.classList.remove('drop-zone-active');
+        });
+    }
+
     renderBookmarks(folder = null) {
         const container = document.getElementById('bookmarkGrid');
         const targetFolder = folder || this.currentFolder || this.bookmarks;
@@ -623,6 +816,9 @@ class BookmarkWizard {
         bookmarks.forEach(bookmark => {
             const card = document.createElement('div');
             card.className = 'bookmark-card';
+            card.draggable = true;
+            card.dataset.itemType = 'bookmark';
+            card.dataset.itemData = JSON.stringify(bookmark);
             
             const favicon = bookmark.icon ? 
                 `<img class="favicon" src="${bookmark.icon}" alt="" onerror="this.style.display='none'">` :
@@ -643,6 +839,9 @@ class BookmarkWizard {
             card.addEventListener('dblclick', () => {
                 window.open(bookmark.url, '_blank');
             });
+            
+            // Add drag handlers for bookmark cards
+            this.addDragHandlers(card, bookmark);
             
             container.appendChild(card);
         });
@@ -734,13 +933,17 @@ class BookmarkWizard {
 
     updateButtons() {
         const deleteBtn = document.getElementById('deleteBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        
         deleteBtn.disabled = !this.selectedItem || this.selectedItem === this.bookmarks;
+        undoBtn.disabled = !this.lastOperation || this.lastOperation.type !== 'move';
     }
 
     enableButtons() {
         document.getElementById('saveBtn').disabled = false;
         document.getElementById('addFolderBtn').disabled = false;
         document.getElementById('addBookmarkBtn').disabled = false;
+        this.updateButtons(); // This will set the correct state for undo button
     }
 
     showEditModal(type, item = null) {

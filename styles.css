@@ -472,3 +472,55 @@ header h1 {
     z-index: 10000;
     pointer-events: none;
 }
+
+/* Drag and Drop Styles */
+.dragging {
+    opacity: 0.5 !important;
+    transform: rotate(5deg);
+    z-index: 1000;
+}
+
+.drop-zone-active {
+    background-color: #e3f2fd !important;
+    border: 2px dashed #3498db !important;
+    border-radius: 4px;
+}
+
+.folder-item.drop-zone-active {
+    background-color: #e8f5e8 !important;
+    border-left: 4px solid #27ae60 !important;
+}
+
+.bookmark-item[draggable="true"],
+.folder-item[draggable="true"],
+.bookmark-card[draggable="true"] {
+    cursor: grab;
+}
+
+.bookmark-item[draggable="true"]:active,
+.folder-item[draggable="true"]:active,
+.bookmark-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.bookmark-item.dragging,
+.folder-item.dragging,
+.bookmark-card.dragging {
+    opacity: 0.5;
+    transform: scale(0.95) rotate(2deg);
+    transition: none;
+}
+
+/* Drop zone indicator */
+.drop-zone-indicator {
+    height: 3px;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    border-radius: 2px;
+    margin: 2px 0;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
