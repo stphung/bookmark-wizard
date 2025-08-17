@@ -646,6 +646,8 @@ class BookmarkWizard {
                     e.preventDefault();
                     e.stopPropagation();
                     
+                    console.log('Reorder dragover triggered for:', this.draggedItem.name, 'over:', item.name, nearTopEdge ? 'top edge' : 'bottom edge');
+                    
                     // Clear any drop zone highlights
                     this.clearDropIndicators();
                     this.clearInsertionIndicators();
@@ -679,6 +681,7 @@ class BookmarkWizard {
                     e.preventDefault();
                     e.stopPropagation();
                     
+                    console.log('Reordering triggered:', this.draggedItem.name, nearTopEdge ? 'before' : 'after', item.name);
                     this.reorderItems(this.draggedItem, item, nearTopEdge);
                     this.clearInsertionIndicators();
                 }
@@ -915,12 +918,30 @@ class BookmarkWizard {
     }
 
     reorderItems(draggedItem, targetItem, insertBefore) {
+        console.log('reorderItems called:', {
+            draggedItem: draggedItem.name,
+            targetItem: targetItem.name,
+            insertBefore: insertBefore
+        });
+        
         const parent = this.findParentFolder(draggedItem);
-        if (!parent) return;
+        if (!parent) {
+            console.log('No parent found for dragged item');
+            return;
+        }
+        
+        console.log('Parent found:', parent.name);
         
         // Store operation for undo
         const originalIndex = parent.children.indexOf(draggedItem);
         const targetIndex = parent.children.indexOf(targetItem);
+        
+        console.log('Indices:', { originalIndex, targetIndex });
+        
+        if (originalIndex === -1 || targetIndex === -1) {
+            console.log('Item not found in parent children');
+            return;
+        }
         
         this.lastOperation = {
             type: 'reorder',
@@ -937,19 +958,21 @@ class BookmarkWizard {
         const newTargetIndex = parent.children.indexOf(targetItem);
         const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
         
+        console.log('Final insert index:', insertIndex);
+        
         // Insert at new position
         parent.children.splice(insertIndex, 0, draggedItem);
-        
-        // Re-render the interface
-        this.renderFolderTree();
-        this.renderBookmarks();
-        this.updateButtons();
         
         // Mark this folder as manually ordered
         const parentId = this.getFolderIdFromPath(parent);
         this.manuallyOrderedFolders.add(parentId);
         
         console.log(`Reordered ${draggedItem.type} "${draggedItem.name}" ${insertBefore ? 'before' : 'after'} "${targetItem.name}"`);
+        
+        // Re-render the interface
+        this.renderFolderTree();
+        this.renderBookmarks();
+        this.updateButtons();
     }
 
     getFolderIdFromPath(folder) {
