@@ -72,8 +72,11 @@ Works with modern browsers including:
 
 ## Tips
 
-- Double-click bookmarks to open them in a new tab
-- Use the search bar for quick filtering
+- **Drag & Drop**: Drag bookmarks and folders to reorganize them between folders
+- **Keyboard Shortcuts**: Use arrow keys to navigate, Enter to open, Ctrl+Z to undo moves
+- **Double-click** bookmarks to open them in a new tab
+- **Search bar** for quick filtering across all bookmarks
+- **Undo button** (↶) or Ctrl+Z to reverse the last move operation
 - The application saves your bookmark structure when you click "Save Bookmarks"
 - Your original bookmark file remains unchanged - a new file is downloaded
 

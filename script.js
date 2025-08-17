@@ -36,39 +36,6 @@ class BookmarkWizard {
             }
         });
 
-        // Drag and drop support
-        const container = document.querySelector('.container');
-        
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            container.classList.add('drag-over');
-        });
-
-        container.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            container.classList.remove('drag-over');
-        });
-
-        container.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            container.classList.remove('drag-over');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].type === 'text/html') {
-                this.loadBookmarkFile(files[0]);
-            } else if (files.length > 0) {
-                // Try to load even if mime type is not recognized
-                console.log('File type:', files[0].type, 'Name:', files[0].name);
-                if (files[0].name.endsWith('.html') || files[0].name.endsWith('.htm')) {
-                    this.loadBookmarkFile(files[0]);
-                } else {
-                    alert('Please drop an HTML bookmark file');
-                }
-            }
-        });
         
         document.getElementById('saveBtn').addEventListener('click', () => {
             this.saveBookmarks();
@@ -657,6 +624,8 @@ class BookmarkWizard {
         element.addEventListener('dragover', (e) => {
             if (!this.draggedItem || this.draggedItem === folder) return;
             
+            // Stop event propagation to prevent parent containers from triggering
+            e.stopPropagation();
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             
@@ -666,18 +635,26 @@ class BookmarkWizard {
                 return;
             }
             
+            // Clear other drop zone highlights first
+            this.clearDropIndicators();
             element.classList.add('drop-zone-active');
         });
         
         element.addEventListener('dragleave', (e) => {
-            // Only remove highlight if we're leaving the element entirely
-            if (!element.contains(e.relatedTarget)) {
+            e.stopPropagation();
+            // Only remove highlight if we're actually leaving this specific element
+            const rect = element.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
                 element.classList.remove('drop-zone-active');
             }
         });
         
         element.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             element.classList.remove('drop-zone-active');
             
             if (!this.draggedItem || this.draggedItem === folder) return;

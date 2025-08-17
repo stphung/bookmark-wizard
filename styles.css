@@ -451,27 +451,6 @@ header h1 {
     margin-left: 1.5rem;
 }
 
-.container.drag-over {
-    position: relative;
-}
-
-.container.drag-over::after {
-    content: 'Drop bookmark file here';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(52, 152, 219, 0.9);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    font-weight: bold;
-    z-index: 10000;
-    pointer-events: none;
-}
 
 /* Drag and Drop Styles */
 .dragging {
@@ -484,11 +463,30 @@ header h1 {
     background-color: #e3f2fd !important;
     border: 2px dashed #3498db !important;
     border-radius: 4px;
+    position: relative;
 }
 
 .folder-item.drop-zone-active {
     background-color: #e8f5e8 !important;
-    border-left: 4px solid #27ae60 !important;
+    border: 2px dashed #27ae60 !important;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+}
+
+.folder-item.drop-zone-active::before {
+    content: 'Drop here';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #27ae60;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 100;
 }
 
 .bookmark-item[draggable="true"],
