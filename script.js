@@ -504,10 +504,10 @@ class BookmarkWizard {
                     if (child.type === 'folder') {
                         // Render subfolder
                         renderFolder(child, level + 1, folderId, childContainer);
-                    } else if (child.type === 'bookmark' && !this.compactMode) {
+                    } else if (child.type === 'bookmark') {
                         // Render bookmark
                         const bookmarkEl = document.createElement('div');
-                        bookmarkEl.className = 'bookmark-item';
+                        bookmarkEl.className = `bookmark-item ${this.compactMode ? 'compact' : ''}`;
                         bookmarkEl.style.marginLeft = `${(level + 1) * 1}rem`;
                         bookmarkEl.draggable = true;
                         bookmarkEl.dataset.itemType = 'bookmark';
