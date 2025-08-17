@@ -626,23 +626,35 @@ class BookmarkWizard {
         element.addEventListener('dragover', (e) => {
             if (!this.draggedItem || this.draggedItem === item) return;
             
-            e.preventDefault();
-            e.stopPropagation();
-            
             // Check if we're dragging within the same parent container
             const draggedParent = this.findParentFolder(this.draggedItem);
             const targetParent = this.findParentFolder(item);
             
             if (draggedParent === targetParent) {
-                // Same parent - show insertion indicator
                 const rect = element.getBoundingClientRect();
-                const midY = rect.top + rect.height / 2;
-                const insertBefore = e.clientY < midY;
+                const y = e.clientY;
+                const topEdge = rect.top;
+                const bottomEdge = rect.bottom;
+                const height = rect.height;
+                const edgeThreshold = Math.min(height * 0.25, 8); // 25% of height or 8px max
                 
-                this.clearInsertionIndicators();
-                this.showInsertionIndicator(element, insertBefore);
+                // Only handle reordering if mouse is near top or bottom edge
+                const nearTopEdge = y <= topEdge + edgeThreshold;
+                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
                 
-                e.dataTransfer.dropEffect = 'move';
+                if (nearTopEdge || nearBottomEdge) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Clear any drop zone highlights
+                    this.clearDropIndicators();
+                    this.clearInsertionIndicators();
+                    
+                    // Show insertion indicator
+                    this.showInsertionIndicator(element, nearTopEdge);
+                    
+                    e.dataTransfer.dropEffect = 'move';
+                }
             }
         });
         
@@ -653,16 +665,23 @@ class BookmarkWizard {
             const targetParent = this.findParentFolder(item);
             
             if (draggedParent === targetParent) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Reorder within same parent
                 const rect = element.getBoundingClientRect();
-                const midY = rect.top + rect.height / 2;
-                const insertBefore = e.clientY < midY;
+                const y = e.clientY;
+                const topEdge = rect.top;
+                const bottomEdge = rect.bottom;
+                const height = rect.height;
+                const edgeThreshold = Math.min(height * 0.25, 8);
                 
-                this.reorderItems(this.draggedItem, item, insertBefore);
-                this.clearInsertionIndicators();
+                const nearTopEdge = y <= topEdge + edgeThreshold;
+                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
+                
+                if (nearTopEdge || nearBottomEdge) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    this.reorderItems(this.draggedItem, item, nearTopEdge);
+                    this.clearInsertionIndicators();
+                }
             }
         });
     }
@@ -671,20 +690,40 @@ class BookmarkWizard {
         element.addEventListener('dragover', (e) => {
             if (!this.draggedItem || this.draggedItem === folder) return;
             
-            // Stop event propagation to prevent parent containers from triggering
-            e.stopPropagation();
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            // Check if this is a different parent (for moving into folder)
+            const draggedParent = this.findParentFolder(this.draggedItem);
+            const isMovingToFolder = draggedParent !== folder;
             
-            // Prevent dropping folder into itself or its descendants
-            if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
-                e.dataTransfer.dropEffect = 'none';
-                return;
+            if (isMovingToFolder) {
+                const rect = element.getBoundingClientRect();
+                const y = e.clientY;
+                const topEdge = rect.top;
+                const bottomEdge = rect.bottom;
+                const height = rect.height;
+                const edgeThreshold = Math.min(height * 0.25, 8);
+                
+                // Only handle folder drop in center area (not near edges)
+                const nearTopEdge = y <= topEdge + edgeThreshold;
+                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
+                const inCenterArea = !nearTopEdge && !nearBottomEdge;
+                
+                if (inCenterArea) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    
+                    // Prevent dropping folder into itself or its descendants
+                    if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                        e.dataTransfer.dropEffect = 'none';
+                        return;
+                    }
+                    
+                    // Clear reorder indicators and show drop zone
+                    this.clearInsertionIndicators();
+                    this.clearDropIndicators();
+                    element.classList.add('drop-zone-active');
+                }
             }
-            
-            // Clear other drop zone highlights first
-            this.clearDropIndicators();
-            element.classList.add('drop-zone-active');
         });
         
         element.addEventListener('dragleave', (e) => {
@@ -700,18 +739,36 @@ class BookmarkWizard {
         });
         
         element.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drop-zone-active');
-            
             if (!this.draggedItem || this.draggedItem === folder) return;
             
-            // Prevent dropping folder into itself or its descendants
-            if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
-                return;
-            }
+            const draggedParent = this.findParentFolder(this.draggedItem);
+            const isMovingToFolder = draggedParent !== folder;
             
-            this.moveItem(this.draggedItem, folder);
+            if (isMovingToFolder) {
+                const rect = element.getBoundingClientRect();
+                const y = e.clientY;
+                const topEdge = rect.top;
+                const bottomEdge = rect.bottom;
+                const height = rect.height;
+                const edgeThreshold = Math.min(height * 0.25, 8);
+                
+                const nearTopEdge = y <= topEdge + edgeThreshold;
+                const nearBottomEdge = y >= bottomEdge - edgeThreshold;
+                const inCenterArea = !nearTopEdge && !nearBottomEdge;
+                
+                if (inCenterArea) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    element.classList.remove('drop-zone-active');
+                    
+                    // Prevent dropping folder into itself or its descendants
+                    if (this.draggedItem.type === 'folder' && this.isDescendant(this.draggedItem, folder)) {
+                        return;
+                    }
+                    
+                    this.moveItem(this.draggedItem, folder);
+                }
+            }
         });
     }
 
@@ -831,14 +888,17 @@ class BookmarkWizard {
     showInsertionIndicator(element, insertBefore) {
         const indicator = document.createElement('div');
         indicator.className = 'insertion-indicator';
+        indicator.innerHTML = `
+            <div class="insertion-line"></div>
+            <div class="insertion-text">Reorder ${insertBefore ? 'above' : 'below'}</div>
+        `;
         indicator.style.cssText = `
-            height: 3px;
-            background: linear-gradient(90deg, #e74c3c, #f39c12);
-            border-radius: 2px;
-            margin: 1px 0;
-            animation: pulse 1s infinite;
             position: relative;
+            height: 20px;
+            margin: 2px 0;
             z-index: 1000;
+            display: flex;
+            align-items: center;
         `;
         
         if (insertBefore) {

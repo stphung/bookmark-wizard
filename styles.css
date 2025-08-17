@@ -474,19 +474,20 @@ header h1 {
 }
 
 .folder-item.drop-zone-active::before {
-    content: 'Drop here';
+    content: 'Move into folder';
     position: absolute;
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
     background: #27ae60;
     color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
+    padding: 3px 8px;
+    border-radius: 4px;
     font-size: 0.7rem;
     font-weight: bold;
     pointer-events: none;
     z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .bookmark-item[draggable="true"],
@@ -520,13 +521,32 @@ header h1 {
 
 /* Insertion indicator for reordering */
 .insertion-indicator {
-    height: 3px !important;
-    background: linear-gradient(90deg, #e74c3c, #f39c12) !important;
-    border-radius: 2px !important;
-    margin: 1px 0 !important;
-    animation: pulse 1s infinite !important;
     position: relative !important;
+    height: 20px !important;
+    margin: 2px 0 !important;
     z-index: 1000 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.insertion-line {
+    height: 4px;
+    background: linear-gradient(90deg, #e74c3c, #f39c12);
+    border-radius: 2px;
+    flex: 1;
+    animation: pulse 1s infinite;
+    margin-right: 8px;
+}
+
+.insertion-text {
+    background: #e74c3c;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 @keyframes pulse {
